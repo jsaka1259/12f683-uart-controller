@@ -19,6 +19,40 @@
 #define MISO GP2
 #define SW   GP3
 
+#define SW_ON 0x01
+
+#define CHATT_CNT 10
+
+uint8_t read_sw(void) {
+  static uint8_t sw;
+  static uint8_t sw_cnt[2];
+
+  if ((sw & SW_ON) == 0) {
+    if (SW == 0)
+      sw_cnt[0]++;
+    else
+      sw_cnt[0] = 0;
+
+    if (sw_cnt[0] > CHATT_CNT) {
+      sw_cnt[0] = 0;
+      sw |= SW_ON;
+      return sw;
+    }
+  } else {
+    if (SW == 1)
+      sw_cnt[1]++;
+    else
+      sw_cnt[1] = 0;
+
+    if (sw_cnt[1] > CHATT_CNT) {
+      sw_cnt[1] = 0;
+      sw &= ~SW_ON;
+    }
+  }
+
+  return 0;
+}
+
 void main(void) {
   OSCCON = 0x70;
   GPIO   = 0x00;
@@ -31,38 +65,24 @@ void main(void) {
   char buf[3] = {};
   uint8_t c;
   int8_t  i;
+  uint8_t sw;
 
-#ifdef DEBUG
-  i2c_init();
-  st7032i_init();
-  st7032i_clear();
-  st7032i_cmd(0x80);
-  st7032i_puts("UART:");
-#else
   uart_init();
-#endif
 
   while(1) {
     SL = 0;
     SL = 1;
 
-    c = 0;
-    c = c | ((uint8_t)MISO << 7);
+    c  = 0;
+    c |= ((uint8_t)MISO << 7);
     for (i = 6; i >= 0; i--) {
       SCK = 1;
       SCK = 0;
-      c = c | (MISO << i);
+      c  |= (MISO << i);
     }
 
-    if (SW == 0) {
-#ifdef DEBUG
-      st7032i_cmd(0x86);
-      st7032i_puts(itos(buf, c, 16, 2, '0'));
-#else
+    sw = read_sw();
+    if (sw & SW_ON)
       uart_putc(c);
-#endif
-      while (SW == 0);
-      __delay_ms(10);
-    }
   }
 }
